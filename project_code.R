@@ -133,7 +133,24 @@ neighborhood.911_data$S_HOOD[which(neighborhood.911_data$S_HOOD %in% c("Central 
 neighborhood.911_data$S_HOOD[which(neighborhood.911_data$S_HOOD %in% c("Briancliff","Lawton Park","Southeast Magnolia"))] <- "Magnolia"
 neighborhood.911_data$S_HOOD[which(neighborhood.911_data$S_HOOD %in% c("Atlantic","Harrison/Denny-Blaine","Mann"))] <- "Central"
 
-# Cleaning up Zillow Dataset
+neighborhood.911_data$Event.Clearance.Group <-  as.factor(neighborhood.911_data$Event.Clearance.Group)
+
+# Initializing new columns in 911 data for each event type for classification with 0/1 flag
+
+neighborhood.911_data$Burglary <- 0
+neighborhood.911_data$Arrests <- 0
+neighborhood.911_data$Assaults <- 0
+neighborhood.911_data$Disturbances <- 0
+neighborhood.911_data$Robbery <- 0
+
+neighborhood.911_data$Burglary[which(neighborhood.911_data$Event.Clearance.Group %in% "BURGLARY")]<-1
+neighborhood.911_data$Arrests[which(neighborhood.911_data$Event.Clearance.Group %in% "ARREST")]<-1
+neighborhood.911_data$Assaults[which(neighborhood.911_data$Event.Clearance.Group %in% "ASSAULTS")]<-1
+neighborhood.911_data$Disturbances[which(neighborhood.911_data$Event.Clearance.Group %in% "DISTURBANCES")]<-1
+neighborhood.911_data$Robbery[which(neighborhood.911_data$Event.Clearance.Group %in% "ROBBERY")]<-1
+
+
+## Cleaning up Zillow Dataset
 # Eliminating all cities except City == Seattle
 
 raw.data_zillow <- subset(raw.data_zillow,raw.data_zillow$City=="Seattle")
