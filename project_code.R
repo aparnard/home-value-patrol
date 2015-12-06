@@ -228,9 +228,53 @@ colnames(Arrests_data) <- c("Year","Month","Neighborhood","Arrest.Count")
 colnames(Disturbances_data) <- c("Year","Month","Neighborhood","Disturbance.Count")
 colnames(Robbery_data) <- c("Year","Month","Neighborhood","Robbery.Count")
 
-aggregate.911.neighborhood <- data.frame(cbind(as.character(Assaults_data$Year), as.character(Assaults_data$Month), as.character(Assaults_data$Neighborhood), Assaults_data$Assault.Count, Burglaries_data$Burglary.Count, Arrests_data$Arrest.Count, Disturbances_data$Disturbance.Count, Robbery_data$Robbery.Count))
-colnames(aggregate.911.neighborhood) <- c("Year","Month","Neighborhood","Assault.Count","Burglary.Count","Arrest.Count","Disturbances.Count","Robbery.Count")
+aggregate.911.neighborhood <- as.data.frame(cbind(as.character(Assaults_data$Year), as.character(Assaults_data$Month), as.character(Assaults_data$Neighborhood), as.numeric(Assaults_data$Assault.Count), as.numeric(Burglaries_data$Burglary.Count), as.numeric(Arrests_data$Arrest.Count), as.numeric(Disturbances_data$Disturbance.Count), as.numeric(Robbery_data$Robbery.Count)))
+colnames(aggregate.911.neighborhood) <- c("Year","Month","Neighborhood","Assault.Count","Burglary.Count","Arrest.Count","Disturbance.Count","Robbery.Count")
 
 write.csv(aggregate.911.neighborhood, "Aggregate 911 data.csv")
 
-zillow.911.merged <- merge(x=crime.values,y=clean.data_zillow,by=c("Neighborhood","Year","Month"))
+zillow.911.merged <- as.data.frame(merge(x=aggregate.911.neighborhood,y=clean.data_zillow,by=c("Neighborhood","Year","Month")))
+
+## Time for action - Multiple Regression between home value and crime data
+
+# Plotting Data
+x <- c("home.value","Arrest.Count","Burglary.Count","Robbery.Count")
+plot.merged.data <- subset(zillow.911.merged,)[x]
+plot.merged.data <- plot.merged.data[order(plot.merged.data$Arrest.Count, plot.merged.data$Burglary.Count, plot.merged.data$Robbery.Count),] 
+
+plot.merged.data$Arrest.Count <- as.numeric(plot.merged.data$Arrest.Count)
+plot.merged.data$Burglary.Count <- as.numeric(plot.merged.data$Burglary.Count)
+plot.merged.data$Robbery.Count <- as.numeric(plot.merged.data$Robbery.Count)
+
+plot(plot.merged.data)
+
+# Multiple regression model with all 5 parameters: Assaults, arrests, burglaries, disturbances, robberies
+multiple.lm <- lm(home.value ~ as.numeric(Assault.Count) + as.numeric(Arrest.Count) + as.numeric(Burglary.Count) + as.numeric(Disturbance.Count) + as.numeric(Robbery.Count), data = zillow.911.merged)
+summary(multiple.lm)
+
+# Multiple regression model without disturbances
+multiple.lm.2 <- lm(home.value ~ as.numeric(Assault.Count) + as.numeric(Arrest.Count) + as.numeric(Burglary.Count) + as.numeric(Robbery.Count), data = zillow.911.merged)
+summary(multiple.lm.2)
+
+# Linear regression with crime = disturbances
+dist.lm <- lm(home.value ~ as.numeric(Disturbance.Count), data = zillow.911.merged)
+summary(dist.lm)
+
+# Linear regression with Assaults
+assault.lm <- lm(home.value ~ as.numeric(Assault.Count), data = zillow.911.merged)
+summary(assault.lm)
+
+# Multiple regression without burglaries
+multiple.lm.3 <- lm(home.value ~ as.numeric(Assault.Count) + as.numeric(Arrest.Count) + as.numeric(Disturbance.Count) + as.numeric(Robbery.Count), data = zillow.911.merged)
+summary(multiple.lm.3)
+
+# Multiple regression model without the two confounding variables disturbances and assaults
+multiple.lm.4 <- lm(home.value ~  as.numeric(Arrest.Count) + as.numeric(Burglary.Count) + as.numeric(Robbery.Count), data = zillow.911.merged)
+summary(multiple.lm.4)
+
+# Main Plot
+
+ggplot(data = plot.merged.data, aes(x = crime, y = home.value))  +
+  geom_point(aes(x = Arrest.Count, y = home.value), stat = "identity", colour = 'red',alpha = "0.5", size = 3.5) +
+  geom_point(aes(x = Burglary.Count, y = home.value), stat = "identity", colour = 'blue',alpha = "0.5", size = 3.5) +
+  geom_point(aes(x = Robbery.Count, y = home.value), stat = "identity", colour = 'green',alpha = "0.5", size = 3.5) 
