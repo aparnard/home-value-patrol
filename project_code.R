@@ -170,8 +170,67 @@ clean.data_zillow["ym"] <- NULL
 rownames(clean.data_zillow) <- NULL
 clean.data_zillow <- clean.data_zillow %>% gather("Neighborhood",zvhi_score, Capitol.Hill:Jackson.Place)
 clean.data_zillow$Neighborhood <- gsub("[.]"," ",clean.data_zillow$Neighborhood)
-colnames(clean.data_zillow) <- c("year","month","neighborhood","home.value")
+colnames(clean.data_zillow) <- c("Year","Month","Neighborhood","home.value")
 
 # Manual neighborhood cleanup for Zillow - 911 intersection
 
 clean.data_zillow$neighborhood[which(clean.data_zillow$neighborhood %in% "Mt  Baker")] <- "Mount Baker"
+
+## Moving to the final section -- Merging 911 and Zillow Datasets inner join
+
+neighborhood.911_data$Neighborhood <- neighborhood.911_data$S_HOOD
+
+## Creating new dataframe with aggregated values for each crime type
+
+crime.values <- data.frame(table(neighborhood.911_data$Year, neighborhood.911_data$Month,neighborhood.911_data$Neighborhood,neighborhood.911_data$Event.Clearance.Group))
+colnames(crime.values) <- c("Year","Month","Neighborhood","Type","Frequency")
+
+crime.values$Burglary <- 0
+crime.values$Arrests <- 0
+crime.values$Assaults <- 0
+crime.values$Disturbances <- 0
+crime.values$Robbery <- 0
+
+crime.values$Burglary[which(crime.values$Type %in% "BURGLARY")] <- crime.values$Frequency[which(crime.values$Type %in% "BURGLARY")]
+crime.values$Arrests[which(crime.values$Type %in% "ARREST")] <- crime.values$Frequency[which(crime.values$Type %in% "ARREST")]
+crime.values$Assaults[which(crime.values$Type %in% "ASSAULTS")] <- crime.values$Frequency[which(crime.values$Type %in% "ASSAULTS")]
+crime.values$Disturbances[which(crime.values$Type %in% "DISTURBANCES")] <- crime.values$Frequency[which(crime.values$Type %in% "DISTURBANCES")]
+crime.values$Robbery[which(crime.values$Type %in% "ROBBERY")] <- crime.values$Frequency[which(crime.values$Type %in% "ROBBERY")]
+
+join_cols_reqd <- c("Year","Month","Neighborhood","Burglary","Assaults","Disturbances","Robbery","Arrests")
+
+crime.values <- subset(crime.values)[join_cols_reqd]
+
+# write.csv(neighborhood.911_data,"911 Neighborhoods data.csv")
+# write.csv(clean.data_zillow,"Zillow clean data.csv")
+# write.csv(crime.values,"crime values.csv")
+
+crime.values$Year <-  as.character(crime.values$Year)
+crime.values$Month <- as.character(crime.values$Month)
+crime.values$Neighborhood <- as.character(crime.values$Neighborhood)
+crime.values$Burglary <- as.numeric(crime.values$Burglary)
+crime.values$Assaults <- as.numeric(crime.values$Assaults)
+crime.values$Disturbances <- as.numeric(crime.values$Disturbances)
+crime.values$Robbery <- as.numeric(crime.values$Robbery)
+crime.values$Arrests <-  as.numeric(crime.values$Arrests)
+
+# Grouping data by neighborhood, year and month
+
+Assaults_data <- as.data.frame(xtabs(crime.values$Assaults ~ crime.values$Year + crime.values$Month + crime.values$Neighborhood))
+Burglaries_data <- as.data.frame(xtabs(crime.values$Burglary ~ crime.values$Year + crime.values$Month + crime.values$Neighborhood))
+Arrests_data <- as.data.frame(xtabs(crime.values$Arrests ~ crime.values$Year + crime.values$Month + crime.values$Neighborhood))
+Disturbances_data <- as.data.frame(xtabs(crime.values$Disturbances ~ crime.values$Year + crime.values$Month + crime.values$Neighborhood))
+Robbery_data <- as.data.frame(xtabs(crime.values$Robbery ~ crime.values$Year + crime.values$Month + crime.values$Neighborhood))
+
+colnames(Assaults_data) <- c("Year","Month","Neighborhood","Assault.Count")
+colnames(Burglaries_data) <- c("Year","Month","Neighborhood","Burglary.Count")
+colnames(Arrests_data) <- c("Year","Month","Neighborhood","Arrest.Count")
+colnames(Disturbances_data) <- c("Year","Month","Neighborhood","Disturbance.Count")
+colnames(Robbery_data) <- c("Year","Month","Neighborhood","Robbery.Count")
+
+aggregate.911.neighborhood <- data.frame(cbind(as.character(Assaults_data$Year), as.character(Assaults_data$Month), as.character(Assaults_data$Neighborhood), Assaults_data$Assault.Count, Burglaries_data$Burglary.Count, Arrests_data$Arrest.Count, Disturbances_data$Disturbance.Count, Robbery_data$Robbery.Count))
+colnames(aggregate.911.neighborhood) <- c("Year","Month","Neighborhood","Assault.Count","Burglary.Count","Arrest.Count","Disturbances.Count","Robbery.Count")
+
+write.csv(aggregate.911.neighborhood, "Aggregate 911 data.csv")
+
+zillow.911.merged <- merge(x=crime.values,y=clean.data_zillow,by=c("Neighborhood","Year","Month"))
