@@ -1,7 +1,7 @@
 ## Home Value Patrol - A study to understand the effect of crime on home values in Seattle
 
 # Set Working Directory
-setwd("C:/Users/UW_STUDENT_Virtual/Desktop/572 - Group Project")
+setwd("C:/Users/UW_STUDENT_Virtual/Desktop/572/572 - Group Project")
 
 # Required Packages for Project
 # 1. gpclib: General Polygon Clipping Library for R
@@ -35,6 +35,7 @@ library("rgeos")
 require("maptools")
 library("spatialEco")
 library("ggmap")
+library("plyr")
 
 # Importing Datasets
 
@@ -79,9 +80,9 @@ View(crime.frequency)
 colnames(crime.frequency) = c("crime","count")
 
 ggplot(data = crime.frequency, aes(x = crime, y=count,fill=crime)) +
-    geom_bar(stat = "identity", color = "white") +
+    geom_bar(stat = "identity", color = "white", width = 0.75) +
     ggtitle("Crime Frequency since 2010") 
-  
+   
 
 # Exploring the crime rates by year
 
@@ -91,17 +92,16 @@ View(crime.frequency.year)
 colnames(crime.frequency.year) = c("year","count")
 
 ggplot(data = crime.frequency.year, aes(x = year, y=count, fill=count)) +
-  geom_bar(stat = "identity", color = "white") +
+  geom_bar(stat = "identity", color = "white", width = 0.85) +
   ggtitle("Crime statistics by year")
 
 # Exploring Seattle Map and plotting our crime data
 
 seattle.map <- qmap('Seattle',zoom=11, maptype = "hybrid")
-seattle.map + geom_point(data = clean.data_911, aes(x = clean.data_911$Longitude, y = clean.data_911$Latitude), color = "yellow", alpha = 0.02, na.rm = TRUE, size = 3) +
+seattle.map + geom_point(data = clean.data_911, aes(x = clean.data_911$Longitude, y = clean.data_911$Latitude), color = "coral", alpha = 0.02, na.rm = TRUE, size = 4) +
   ggtitle("Crime in Seattle") + 
   xlab("Longitude") +
-  ylab("Latitude")
-
+  ylab("Latitude") 
 
 # Cleaning 911 data further by mapping longitude + latitude to neighborhoods
 
@@ -125,9 +125,36 @@ neighborhood.911_data<-neighborhood.911_data[c("Year","Month","Event.Clearance.G
 # Some more manual cleaning in neighborhoods to refine zones
 
 unique(subset(neighborhood.911_data, neighborhood.911_data$L_HOOD=="CENTRAL AREA")$S_HOOD)
-neighborhood.911_data["S_HOOD"=="Adams"]<-"Ballard"
-neighborhood.911_data["S_HOOD"=="Mid-Beacon Hill"]<-"Beacon Hill"
-neighborhood.911_data["S_HOOD"==c("Broadway","Stevens")]<-"Capitol Hill"
-neighborhood.911_data["S_HOOD"==c("Central Business District","International District","Pike-Market","Pioneer Square","Yesler Terrace")]<-"Downtown"
+neighborhood.911_data$S_HOOD <-  as.character(neighborhood.911_data$S_HOOD)
+neighborhood.911_data$S_HOOD[which(neighborhood.911_data$S_HOOD %in% "Adams")]<-"Ballard"
+neighborhood.911_data$S_HOOD[which(neighborhood.911_data$S_HOOD %in% "Mid-Beacon Hill")]<-"Beacon Hill"
+neighborhood.911_data$S_HOOD[which(neighborhood.911_data$S_HOOD %in% c("Broadway","Stevens"))] <- "Capitol Hill"
+neighborhood.911_data$S_HOOD[which(neighborhood.911_data$S_HOOD %in% c("Central Business District","International District","Pike-Market","Pioneer Square","Yesler Terrace"))]<-"Downtown"
+neighborhood.911_data$S_HOOD[which(neighborhood.911_data$S_HOOD %in% c("Briancliff","Lawton Park","Southeast Magnolia"))] <- "Magnolia"
+neighborhood.911_data$S_HOOD[which(neighborhood.911_data$S_HOOD %in% c("Atlantic","Harrison/Denny-Blaine","Mann"))] <- "Central"
 
 # Cleaning up Zillow Dataset
+# Eliminating all cities except City == Seattle
+
+raw.data_zillow <- subset(raw.data_zillow,raw.data_zillow$City=="Seattle")
+
+raw.data_zillow$Metro <- NULL
+raw.data_zillow$City <- NULL
+raw.data_zillow$State <- NULL
+raw.data_zillow$CountyName <- NULL
+
+rownames(raw.data_zillow) <- raw.data_zillow[,"RegionName"]
+raw.data_zillow["RegionName"] <- NULL
+clean.data_zillow <- data.frame(t(raw.data_zillow))
+clean.data_zillow["ym"] <- rownames(clean.data_zillow)
+clean.data_zillow["Year"] <- substr(clean.data_zillow$ym,2,5)
+clean.data_zillow["Month"] <- substr(clean.data_zillow$ym,7,8)
+clean.data_zillow["ym"] <- NULL
+rownames(clean.data_zillow) <- NULL
+clean.data_zillow <- clean.data_zillow %>% gather("Neighborhood",zvhi_score, Capitol.Hill:Jackson.Place)
+clean.data_zillow$Neighborhood <- gsub("[.]"," ",clean.data_zillow$Neighborhood)
+colnames(clean.data_zillow) <- c("year","month","neighborhood","home.value")
+
+# Manual neighborhood cleanup for Zillow - 911 intersection
+
+clean.data_zillow$neighborhood[which(clean.data_zillow$neighborhood %in% "Mt  Baker")] <- "Mount Baker"
