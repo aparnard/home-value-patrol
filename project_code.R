@@ -36,6 +36,7 @@ require("maptools")
 library("spatialEco")
 library("ggmap")
 library("plyr")
+library("reshape2")
 
 # Importing Datasets
 
@@ -60,10 +61,10 @@ reqd_events <- c("ARREST", "ASSAULTS","BURGLARY","DISTURBANCES","ROBBERY","TRESS
 
 clean.data_911 <- subset(raw.data_911, 
                          raw.data_911$Event.Clearance.Group !="NULL" & 
-                         raw.data_911$Event.Clearance.Group %in% reqd_events & 
-                         raw.data_911$Incident.Location != "NULL"& 
-                         raw.data_911$Event.Clearance.Date != "NULL" &
-                         raw.data_911$Event.Clearance.Date != "")[reqd_cols]
+                           raw.data_911$Event.Clearance.Group %in% reqd_events & 
+                           raw.data_911$Incident.Location != "NULL"& 
+                           raw.data_911$Event.Clearance.Date != "NULL" &
+                           raw.data_911$Event.Clearance.Date != "")[reqd_cols]
 
 clean.data_911["Year"]<-substr(as.character(clean.data_911$Event.Clearance.Date),7,10)
 clean.data_911["Month"]<-substr(as.character(clean.data_911$Event.Clearance.Date),1,2)
@@ -80,9 +81,11 @@ View(crime.frequency)
 colnames(crime.frequency) = c("crime","count")
 
 ggplot(data = crime.frequency, aes(x = crime, y=count,fill=crime)) +
-    geom_bar(stat = "identity", color = "white", width = 0.75) +
-    ggtitle("Crime Frequency since 2010") 
-   
+  geom_bar(stat = "identity", color = "white", width = 0.55) +
+  ggtitle("Crime Frequency since 2010") +
+  theme(legend.text=element_text(size=18),axis.text=element_text(size=16),
+        axis.title=element_text(size=16,face="bold"), plot.title = element_text(size=22)) 
+
 
 # Exploring the crime rates by year
 
@@ -92,8 +95,24 @@ View(crime.frequency.year)
 colnames(crime.frequency.year) = c("year","count")
 
 ggplot(data = crime.frequency.year, aes(x = year, y=count, fill=count)) +
-  geom_bar(stat = "identity", color = "white", width = 0.85) +
-  ggtitle("Crime statistics by year")
+  geom_bar(stat = "identity", color = "white", width = 0.65) +
+  ggtitle("Crime statistics by year") +
+  theme(legend.text=element_text(size=18),axis.text=element_text(size=18),
+        axis.title=element_text(size=18,face="bold"), plot.title = element_text(size=22))
+
+# Visualizing monthly trends in crimes
+clean.data_911$Month = as.factor(clean.data_911$Month)
+monthly.trends <- as.data.frame(table(clean.data_911$Month, clean.data_911$Event.Clearance.Group))
+monthly.trends <- subset(monthly.trends,monthly.trends$Var2 %in% reqd_events)
+colnames(monthly.trends) <- c("month","crime","value")
+
+ggplot(data=monthly.trends, aes(x=month, y=value, group=crime, colour=crime)) +
+  geom_line(size=1.5) +
+  geom_point(size=3, fill="white") +
+  ggtitle("Crime trends by type by month") +
+  theme(legend.text=element_text(size=18),axis.text=element_text(size=18),
+        axis.title=element_text(size=18,face="bold"), plot.title = element_text(size=22))
+
 
 # Exploring Seattle Map and plotting our crime data
 
