@@ -22,6 +22,8 @@ install.packages("spatialEco")
 install.packages("tidyr")
 install.packages("dplyr")
 install.packages("ggmap")
+install.packages("ggthemes")
+install.packages("RColorBrewer")
 
 # Loading the packages
 
@@ -37,6 +39,8 @@ library("spatialEco")
 library("ggmap")
 library("plyr")
 library("reshape2")
+library("ggthemes")
+library("RColorBrewer")
 
 # Importing Datasets
 
@@ -94,9 +98,13 @@ crime.frequency.year <- as.data.frame(table(clean.data_911$Year))
 View(crime.frequency.year)
 colnames(crime.frequency.year) = c("year","count")
 
+#Crime statistics by year
+
 ggplot(data = crime.frequency.year, aes(x = year, y=count, fill=count)) +
   geom_bar(stat = "identity", color = "white", width = 0.65) +
-  ggtitle("Crime statistics by year") +
+  ggtitle("Crime statistics by year") +  geom_hline(yintercept=seq(10000,50000,10000),col="white") + 
+  theme(axis.line=element_blank(), axis.text.x=element_blank(), axis.title=element_blank()) +
+  theme_tufte(base_family="GillSans", base_size=16, ticks=F) +
   theme(legend.text=element_text(size=18),axis.text=element_text(size=18),
         axis.title=element_text(size=18,face="bold"), plot.title = element_text(size=22))
 
@@ -104,9 +112,9 @@ ggplot(data = crime.frequency.year, aes(x = year, y=count, fill=count)) +
 clean.data_911$Month = as.factor(clean.data_911$Month)
 monthly.trends <- as.data.frame(table(clean.data_911$Month, clean.data_911$Event.Clearance.Group))
 monthly.trends <- subset(monthly.trends,monthly.trends$Var2 %in% reqd_events)
-colnames(monthly.trends) <- c("month","crime","value")
+colnames(monthly.trends) <- c("month","crime","count")
 
-ggplot(data=monthly.trends, aes(x=month, y=value, group=crime, colour=crime)) +
+ggplot(data=monthly.trends, aes(x=month, y=count, group=crime, colour=crime)) +
   geom_line(size=1.5) +
   geom_point(size=3, fill="white") +
   ggtitle("Crime trends by type by month") +
@@ -134,6 +142,13 @@ coordinates(clean.data_911)<-~Longitude+Latitude # Adding coordinates column
 # creates a special dataframe called : SpatialPointsDataFrame
 proj4string(clean.data_911)<-CRS("+proj=longlat +datum=NAD83")
 clean.data_911<-spTransform(clean.data_911, CRS(proj4string(map)))
+
+# Creating a Map showing the neighborhoods
+Neighborhoods <- spTransform(map, CRS("+proj=longlat +datum=WGS84"))
+Neighborhoods <- fortify(Neighborhoods)
+seattle.map.neighborhoods <- seattle.map + geom_polygon(aes(x=long, y=lat, group=group), fill='grey', size=1,color='green', data=Neighborhoods, alpha=0) 
+
+seattle.map.neighborhoods
 
 # Joining the shape file and data_911. 
 # The coordinate of each 911 call is mapped to the neighborhood from the shapefile
@@ -253,12 +268,14 @@ colnames(aggregate.911.neighborhood) <- c("Year","Month","Neighborhood","Assault
 write.csv(aggregate.911.neighborhood, "Aggregate 911 data.csv")
 
 zillow.911.merged <- as.data.frame(merge(x=aggregate.911.neighborhood,y=clean.data_zillow,by=c("Neighborhood","Year","Month")))
+zillow.911.merged <- zillow.911.merged[order(zillow.911.merged$Arrest.Count, zillow.911.merged$Burglary.Count, zillow.911.merged$Robbery.Count, zillow.911.merged$Assault.Count,zillow.911.merged$Disturbance.Count, decreasing = FALSE),]
 
 ## Time for action - Multiple Regression between home value and crime data
 
 # Plotting Data
-x <- c("home.value","Arrest.Count","Burglary.Count","Robbery.Count")
-plot.merged.data <- subset(zillow.911.merged,)[x]
+plot(zillow.911.merged)
+
+plot(zillow.911.merged[,c("home.value","Arrest.Count","Burglary.Count","Robbery.Count","Assault.Count","Disturbance.Count")])
 plot.merged.data <- plot.merged.data[order(plot.merged.data$Arrest.Count, plot.merged.data$Burglary.Count, plot.merged.data$Robbery.Count),] 
 
 plot.merged.data$Arrest.Count <- as.numeric(plot.merged.data$Arrest.Count)
@@ -268,32 +285,68 @@ plot.merged.data$Robbery.Count <- as.numeric(plot.merged.data$Robbery.Count)
 plot(plot.merged.data)
 
 # Multiple regression model with all 5 parameters: Assaults, arrests, burglaries, disturbances, robberies
-multiple.lm <- lm(home.value ~ as.numeric(Assault.Count) + as.numeric(Arrest.Count) + as.numeric(Burglary.Count) + as.numeric(Disturbance.Count) + as.numeric(Robbery.Count), data = zillow.911.merged)
-summary(multiple.lm)
+zillow.911.merged$Assault.Count <- as.numeric(zillow.911.merged$Assault.Count)
+zillow.911.merged$Burglary.Count <- as.numeric(zillow.911.merged$Burglary.Count)
+zillow.911.merged$Arrest.Count <- as.numeric(zillow.911.merged$Arrest.Count)
+zillow.911.merged$Disturbance.Count <- as.numeric(zillow.911.merged$Disturbance.Count)
+zillow.911.merged$Robbery.Count <- as.numeric(zillow.911.merged$Robbery.Count)
+
+multiple.lm <- lm(home.value ~ Assault.Count + Arrest.Count + Burglary.Count + Disturbance.Count + Robbery.Count, data = zillow.911.merged)
+
+summary(multiple.lm) # The Statistical Summary of our Multiple Regression Model
+plot(multiple.lm) # Plotting the model to check fitted values vs. residuals
+confint(multiple.lm, level = 0.95) # Finding the 95% confidence interval values of the model
 
 # Multiple regression model without disturbances
-multiple.lm.2 <- lm(home.value ~ as.numeric(Assault.Count) + as.numeric(Arrest.Count) + as.numeric(Burglary.Count) + as.numeric(Robbery.Count), data = zillow.911.merged)
+multiple.lm.2 <- lm(home.value ~ Assault.Count + Arrest.Count + Burglary.Count + Robbery.Count, data = zillow.911.merged)
 summary(multiple.lm.2)
 
 # Linear regression with crime = disturbances
-dist.lm <- lm(home.value ~ as.numeric(Disturbance.Count), data = zillow.911.merged)
+dist.lm <- lm(home.value ~ Disturbance.Count, data = zillow.911.merged)
 summary(dist.lm)
 
 # Linear regression with Assaults
-assault.lm <- lm(home.value ~ as.numeric(Assault.Count), data = zillow.911.merged)
+assault.lm <- lm(home.value ~ Assault.Count, data = zillow.911.merged)
 summary(assault.lm)
 
 # Multiple regression without burglaries
-multiple.lm.3 <- lm(home.value ~ as.numeric(Assault.Count) + as.numeric(Arrest.Count) + as.numeric(Disturbance.Count) + as.numeric(Robbery.Count), data = zillow.911.merged)
+multiple.lm.3 <- lm(home.value ~ Assault.Count + Arrest.Count + Disturbance.Count + Robbery.Count, data = zillow.911.merged)
 summary(multiple.lm.3)
 
 # Multiple regression model without the two confounding variables disturbances and assaults
-multiple.lm.4 <- lm(home.value ~  as.numeric(Arrest.Count) + as.numeric(Burglary.Count) + as.numeric(Robbery.Count), data = zillow.911.merged)
+multiple.lm.4 <- lm(home.value ~  Arrest.Count + Burglary.Count + Robbery.Count, data = zillow.911.merged)
 summary(multiple.lm.4)
+
+# Further Analysing and understanding about the confounding variables Assaults and Disturbances
+
+by (zillow.911.merged$Assault.Count, zillow.911.merged$Neighborhood, FUN = sum) # 4471 out of total 17523 assault cases from downtown
+c(by(zillow.911.merged$Disturbance.Count, zillow.911.merged$Neighborhood, FUN = sum))
+
+# Exploring Disturbances plot
+
+disturbance.data <- subset(clean.data_911, clean.data_911$Event.Clearance.Group == "DISTURBANCES")
+
+seattle.map <- qmap('Seattle',zoom=11)
+seattle.map + geom_point(data = disturbance.data, aes(x = disturbance.data$Longitude, y = disturbance.data$Latitude), color = "red", alpha = 0.02, na.rm = TRUE, size = 4) +
+  ggtitle("Disturbance Complaints in Seattle") + 
+  xlab("Longitude") +
+  ylab("Latitude") +
+  theme(legend.text=element_text(size=18),axis.text=element_text(size=18),
+        axis.title=element_text(size=18,face="bold"), plot.title = element_text(size=22))
+
 
 # Main Plot
 
-ggplot(data = plot.merged.data, aes(x = crime, y = home.value))  +
-  geom_point(aes(x = Arrest.Count, y = home.value), stat = "identity", colour = 'red',alpha = "0.5", size = 3.5) +
-  geom_point(aes(x = Burglary.Count, y = home.value), stat = "identity", colour = 'blue',alpha = "0.5", size = 3.5) +
-  geom_point(aes(x = Robbery.Count, y = home.value), stat = "identity", colour = 'green',alpha = "0.5", size = 3.5) 
+colors<-brewer.pal(3,"Set2")
+head(plot.merged.data)
+
+ggplot(data = plot.merged.data, aes(x =as.numeric(Disturbance.Count), y = home.value) ) +
+  
+  geom_point(aes(x = as.numeric(Arrest.Count), y = home.value, colour="arrest"), stat = "identity",alpha = 0.5, size = 3.5) +
+  geom_point(aes(x = as.numeric(Burglary.Count), y = home.value, color="burglary"), stat = "identity",alpha = 0.5, size = 3.5) +
+  geom_point(aes(x = as.numeric(Robbery.Count), y = home.value, color="robbery"), stat = "identity",alpha = 0.5, size = 3.5) +
+  
+  xlab("Crime Count")+ylab("Home Value")+ ggtitle("Plot between Crime count and Home value")+ 
+  scale_y_continuous(labels=c("$300000","$600000","$900000"),breaks=c(300000,600000,900000))+
+  scale_colour_manual(name="Type of Crime",values=c(arrest=colors[1],burglary=colors[2],robbery=colors[3]))  
+
